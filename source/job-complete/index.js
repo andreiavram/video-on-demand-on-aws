@@ -17,7 +17,8 @@
          METRICS,
          SOLUTION_ID,
          VERSION,
-         UUID
+         UUID,
+         SQS_URL
      } = process.env;
  
      try {
@@ -53,7 +54,7 @@
                      /**
                       * send a summary of the job to sqs
                      */
-                     await utils.sendSQS(STACKNAME, status, results);
+                     await utils.sendSQS(SQS_URL, STACKNAME, status, results);
                  } catch (err) {
                      throw err;
                  }
@@ -64,7 +65,7 @@
                   * Send error to SQS
                   */
                  try {
-                     await utils.sendSQS(STACKNAME,status,event);
+                     await utils.sendSQS(SQS_URL, STACKNAME,status,event);
                  } catch (err) {
                      throw err;
                  }
@@ -73,7 +74,7 @@
                  throw new Error('Unknow job status');
          }
      } catch (err) {
-         await utils.sendSQS(STACKNAME,'PROCESSING ERROR',err);
+         await utils.sendSQS(SQS_URL, STACKNAME,'PROCESSING ERROR',err);
          throw err;
      }
      return;
