@@ -15,7 +15,8 @@
          DESTINATION_BUCKET,
          SOLUTION_ID,
          STACKNAME,
-         SNS_TOPIC_ARN
+         SNS_TOPIC_ARN,
+         SQS_URL
      } = process.env;
      
      try {
@@ -48,7 +49,7 @@
          job_result = await utils.createJob(job,MEDIACONVERT_ENDPOINT);
          job.Id = job_result.Job.Id;
          
-         await utils.sendSQS(job, {
+         await utils.sendSQS(SQS_URL, job, {
              "Source": srcVideo, 
              "InputFile": inputPath, 
              "OutputFile": outputPath,

@@ -10,6 +10,7 @@
     "test": "jest --collect-coverage lib/*.spec.js"
   },
   "dependencies": {
+    "aws-cdk": "^2.36.0",
     "axios": "^0.21.1",
     "moment": "^2.29.1",
     "uuid": "^3.4.0"

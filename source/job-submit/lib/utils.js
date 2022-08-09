@@ -184,7 +184,7 @@
  /**
   * Sends video confirmation on SQS queue
   */
- const sendSQS = async (stackName, status, data) => {
+ const sendSQS = async (queue_url, stackName, status, data) => {
      var sqs = new AWS.SQS({
          apiVersion: '2012-11-05',
          region: process.env.REGION
@@ -241,7 +241,7 @@
                  }
              },
              MessageBody: JSON.stringify(msg, null, 2),
-             QueueUrl: "https://sqs.us-east-1.amazonaws.com/281112173855/video-confirmation"
+             QueueUrl: queue_url
          }
      
          await sqs.sendMessage(params, function(err, data) {

@@ -3,6 +3,7 @@ import * as s3 from '@aws-cdk/aws-s3';
 import * as iam from '@aws-cdk/aws-iam';
 import * as lambda from '@aws-cdk/aws-lambda';
 import * as subs from '@aws-cdk/aws-sns-subscriptions';
+import * as sqs from '@aws-cdk/aws-sqs';
 import { HttpMethods } from '@aws-cdk/aws-s3';
 /**
  * AWS Solution Constructs: https://docs.aws.amazon.com/solutions/latest/constructs/
@@ -37,6 +38,31 @@ export class VodFoundation extends cdk.Stack {
             description: "The admin email address to receive SNS notifications for job status.",
             allowedPattern: "^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$"
         });
+
+
+        const sqsQueue = new sqs.Queue(this, 'VideoConfirmationQueue', {
+            fifo: true
+        });
+
+        const sqsWritePolicy = new iam.Policy(this, 'VideoConfirmationSendToQueuePolicy', {
+            statements: [
+                new iam.PolicyStatement({
+                    resources: [`${sqsQueue.queueArn}`],
+                    actions: ['SQS:SendMessage']
+                }),
+            ]
+        });
+
+        const sqsReadDeletePolicy = new iam.Policy(this, 'VideoConfirmationConsumeQueuePolicy', {
+            statements: [
+                new iam.PolicyStatement({
+                    resources: [`${sqsQueue.queueArn}`],
+                    actions: ['SQS:ReceiveMessage', 'SQS:DeleteMessage']
+                }),
+            ]
+        });
+
+
         /**
          * Logs bucket for S3 and CloudFront
         */
@@ -206,7 +232,8 @@ export class VodFoundation extends cdk.Stack {
                 DESTINATION_BUCKET: destination.bucketName,
                 SOLUTION_ID: 'SO0146',
                 STACKNAME: cdk.Aws.STACK_NAME,
-                SOLUTION_IDENTIFIER: 'AwsSolution/SO0146/v1.1.0'
+                SOLUTION_IDENTIFIER: 'AwsSolution/SO0146/v1.1.0',
+                SQS_URL: sqsQueue.queueUrl
                 /** SNS_TOPIC_ARN: added by the solution construct below */
             },
             initialPolicy: [
@@ -246,6 +273,12 @@ export class VodFoundation extends cdk.Stack {
             }]
             }
         };
+
+        if (jobSubmit.role) {
+            sqsQueue.grantConsumeMessages(jobSubmit.role);
+            sqsQueue.grantPurge(jobSubmit.role)
+        }
+
         /**
          * Process outputs lambda function, invoked by CloudWatch events for MediaConvert.
          * Parses the CW event outputs, creates the CloudFront URLs for the outputs, updates
@@ -271,7 +304,8 @@ export class VodFoundation extends cdk.Stack {
                 SOLUTION_ID:'SO0146',
                 VERSION:'1.1.0',
                 UUID:customResourceEndpoint.getAttString('UUID'),
-                SOLUTION_IDENTIFIER: 'AwsSolution/SO0146/v1.1.0'
+                SOLUTION_IDENTIFIER: 'AwsSolution/SO0146/v1.1.0',
+                SQS_URL: sqsQueue.queueUrl
             },
             initialPolicy: [
                 new iam.PolicyStatement({
@@ -284,6 +318,8 @@ export class VodFoundation extends cdk.Stack {
                 })
             ]
         });
+
+        
         const cfnJobComplete = jobComplete.node.findChild('Resource') as lambda.CfnFunction;
         cfnJobComplete.cfnOptions.metadata = {
             cfn_nag: {
@@ -299,6 +335,11 @@ export class VodFoundation extends cdk.Stack {
             }]
             }
         };
+
+        if (jobComplete.role) {
+            sqsQueue.grantSendMessages(jobComplete.role);
+        }
+
         /**
          * Custom resource to configure the source S3 bucket; upload default job-settings file and 
          * enabble event notifications to trigger the job-submit lambda function
