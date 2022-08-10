@@ -44,24 +44,17 @@ export class VodFoundation extends cdk.Stack {
             fifo: true
         });
 
+        const sqsWritePolicyStatement = new iam.PolicyStatement({
+            resources: [`${sqsQueue.queueArn}`],
+            actions: ['SQS:SendMessage'], 
+            effect: iam.Effect.ALLOW
+        })
+
         const sqsWritePolicy = new iam.Policy(this, 'VideoConfirmationSendToQueuePolicy', {
             statements: [
-                new iam.PolicyStatement({
-                    resources: [`${sqsQueue.queueArn}`],
-                    actions: ['SQS:SendMessage']
-                }),
+                sqsWritePolicyStatement
             ]
         });
-
-        const sqsReadDeletePolicy = new iam.Policy(this, 'VideoConfirmationConsumeQueuePolicy', {
-            statements: [
-                new iam.PolicyStatement({
-                    resources: [`${sqsQueue.queueArn}`],
-                    actions: ['SQS:ReceiveMessage', 'SQS:DeleteMessage']
-                }),
-            ]
-        });
-
 
         /**
          * Logs bucket for S3 and CloudFront
@@ -189,7 +182,7 @@ export class VodFoundation extends cdk.Stack {
 				new iam.PolicyStatement({
 					actions: ["mediaconvert:DescribeEndpoints"],
 					resources: [`arn:aws:mediaconvert:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:*`],
-				})
+				}),
 			]
         });
         /** get the cfn resource for the role and attach cfn_nag rule */
@@ -248,7 +241,8 @@ export class VodFoundation extends cdk.Stack {
                 new iam.PolicyStatement({
                     actions: ["s3:GetObject"],
                     resources: [source.bucketArn, `${source.bucketArn}/*`]
-                })
+                }),
+                sqsWritePolicyStatement
 			]
         });
         /** Give S3 permission to trigger the job submit lambda function  */
@@ -257,6 +251,7 @@ export class VodFoundation extends cdk.Stack {
             action: 'lambda:InvokeFunction',
             sourceAccount: cdk.Aws.ACCOUNT_ID
         });
+
         /** get the cfn resource for the role and attach cfn_nag rule */
         const cfnJobSubmit = jobSubmit.node.findChild('Resource') as lambda.CfnFunction;
         cfnJobSubmit.cfnOptions.metadata = {
@@ -273,11 +268,6 @@ export class VodFoundation extends cdk.Stack {
             }]
             }
         };
-
-        if (jobSubmit.role) {
-            sqsQueue.grantConsumeMessages(jobSubmit.role);
-            sqsQueue.grantPurge(jobSubmit.role)
-        }
 
         /**
          * Process outputs lambda function, invoked by CloudWatch events for MediaConvert.
@@ -315,10 +305,10 @@ export class VodFoundation extends cdk.Stack {
                 new iam.PolicyStatement({
                     actions: ["s3:GetObject", "s3:PutObject"],
                     resources: [`${source.bucketArn}/*`]
-                })
+                }),
+                sqsWritePolicyStatement
             ]
         });
-
         
         const cfnJobComplete = jobComplete.node.findChild('Resource') as lambda.CfnFunction;
         cfnJobComplete.cfnOptions.metadata = {
@@ -335,10 +325,6 @@ export class VodFoundation extends cdk.Stack {
             }]
             }
         };
-
-        if (jobComplete.role) {
-            sqsQueue.grantSendMessages(jobComplete.role);
-        }
 
         /**
          * Custom resource to configure the source S3 bucket; upload default job-settings file and 
