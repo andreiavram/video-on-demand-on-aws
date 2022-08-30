@@ -29,6 +29,7 @@
     "@aws-solutions-constructs/aws-cloudfront-s3": "1.110.0",
     "@aws-solutions-constructs/aws-events-rule-lambda": "1.110.0",
     "@aws-solutions-constructs/aws-lambda-sns": "1.110.0",
+    "@aws-solutions-constructs/aws-lambda-sqs": "1.110.0",
     "source-map-support": "^0.5.16"
   }
 }

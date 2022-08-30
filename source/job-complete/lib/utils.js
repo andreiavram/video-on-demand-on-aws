@@ -238,7 +238,10 @@
                  }
              },
              MessageBody: JSON.stringify(msg, null, 2),
-             QueueUrl: queue_url
+             QueueUrl: queue_url,
+             MessageGroupId: id,
+             MessageDeduplicationId: `${id}-complete-message`
+
          }
      
          await sqs.sendMessage(params, function(err, data) {

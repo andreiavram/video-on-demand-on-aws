@@ -11,6 +11,7 @@ import { HttpMethods } from '@aws-cdk/aws-s3';
 import { CloudFrontToS3 } from '@aws-solutions-constructs/aws-cloudfront-s3';
 import { EventsRuleToLambda } from '@aws-solutions-constructs/aws-events-rule-lambda';
 import { LambdaToSns } from '@aws-solutions-constructs/aws-lambda-sns';
+import { LambdaToSqs, LambdaToSqsProps } from "@aws-solutions-constructs/aws-lambda-sqs";
 
 
 export class VodFoundation extends cdk.Stack {
@@ -39,22 +40,15 @@ export class VodFoundation extends cdk.Stack {
             allowedPattern: "^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$"
         });
 
-
         const sqsQueue = new sqs.Queue(this, 'VideoConfirmationQueue', {
-            fifo: true
+            fifo: true,
         });
 
         const sqsWritePolicyStatement = new iam.PolicyStatement({
             resources: [`${sqsQueue.queueArn}`],
-            actions: ['SQS:SendMessage'], 
-            effect: iam.Effect.ALLOW
+            actions: ['sqs:SendMessage'], 
+            effect: iam.Effect.ALLOW,
         })
-
-        const sqsWritePolicy = new iam.Policy(this, 'VideoConfirmationSendToQueuePolicy', {
-            statements: [
-                sqsWritePolicyStatement
-            ]
-        });
 
         /**
          * Logs bucket for S3 and CloudFront
@@ -325,6 +319,28 @@ export class VodFoundation extends cdk.Stack {
             }]
             }
         };
+
+        if (jobComplete.role && jobSubmit.role) {
+            const sqsWritePolicyStatementForQueue = new iam.PolicyStatement({
+                resources: [`${sqsQueue.queueArn}`],
+                actions: ['sqs:SendMessage'], 
+                effect: iam.Effect.ALLOW,
+                principals: [jobComplete.role, jobSubmit.role]
+            })
+
+            sqsQueue.addToResourcePolicy(sqsWritePolicyStatementForQueue);
+        }
+
+        new LambdaToSqs(this, 'submitLambdaPermission', {
+            existingLambdaObj: jobSubmit,
+            existingQueueObj: sqsQueue
+        });
+
+        new LambdaToSqs(this, 'completeLambdaPermission', {
+            existingLambdaObj: jobComplete,
+            existingQueueObj: sqsQueue
+        });
+
 
         /**
          * Custom resource to configure the source S3 bucket; upload default job-settings file and 
